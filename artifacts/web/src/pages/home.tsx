@@ -37,16 +37,13 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     toast({
       title: "Uploading document...",
       description: `Processing ${file.name}`,
     });
 
     uploadMutation.mutate(
-      { data: formData as any },
+      { data: { file } },
       {
         onSuccess: (result) => {
           toast({
