@@ -119,7 +119,7 @@ export default function Home() {
               ref={fileInputRef}
               onChange={handleUpload}
               className="hidden" 
-              accept=".txt,.md,.mdx,.csv,.json" 
+              accept=".txt,.md,.mdx,.csv,.json,.yaml,.yml,.xml,.html,.pdf,.docx,.doc" 
               data-testid="input-file-upload"
             />
             <Button 

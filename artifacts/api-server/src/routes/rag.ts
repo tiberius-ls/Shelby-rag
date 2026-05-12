@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { chunkDocument, storeChunk, listDocuments, ragQuery } from "../lib/rag";
+import { extractText } from "../lib/extract";
 import {
   ListDocumentsResponse,
   UploadDocumentResponse,
@@ -30,7 +31,7 @@ router.post(
       return;
     }
 
-    const text = req.file.buffer.toString("utf-8");
+    const text = await extractText(req.file.buffer, req.file.originalname);
     const filename = req.file.originalname;
     const chunks = chunkDocument(text, filename);
     const blobs: Array<{ blobId: string; chunkIndex: number }> = [];
