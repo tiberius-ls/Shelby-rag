@@ -3,13 +3,15 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Shelby RAG Pipeline API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: rag
+    description: RAG pipeline operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,66 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /rag/documents:
+    get:
+      operationId: listDocuments
+      tags: [rag]
+      summary: List all indexed document chunks
+      responses:
+        "200":
+          description: List of indexed chunks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentList"
+  /rag/upload:
+    post:
+      operationId: uploadDocument
+      tags: [rag]
+      summary: Upload a text document and index its chunks
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/DocumentUploadForm"
+      responses:
+        "200":
+          description: Upload result with chunk info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /rag/query:
+    post:
+      operationId: queryDocuments
+      tags: [rag]
+      summary: Query documents using RAG with Claude
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryInput"
+      responses:
+        "200":
+          description: RAG query result with Claude answer and sources
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +95,107 @@ components:
           type: string
       required:
         - status
-
+    DocumentChunkMeta:
+      type: object
+      properties:
+        blobId:
+          type: string
+        source:
+          type: string
+        index:
+          type: integer
+        preview:
+          type: string
+      required:
+        - blobId
+        - source
+        - index
+        - preview
+    DocumentList:
+      type: object
+      properties:
+        count:
+          type: integer
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentChunkMeta"
+      required:
+        - count
+        - documents
+    DocumentUploadForm:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+      required:
+        - file
+    BlobRef:
+      type: object
+      properties:
+        blobId:
+          type: string
+        chunkIndex:
+          type: integer
+      required:
+        - blobId
+        - chunkIndex
+    UploadResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        filename:
+          type: string
+        chunksStored:
+          type: integer
+        blobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlobRef"
+      required:
+        - success
+        - filename
+        - chunksStored
+        - blobs
+    QueryInput:
+      type: object
+      properties:
+        query:
+          type: string
+        topK:
+          type: integer
+      required:
+        - query
+    QuerySource:
+      type: object
+      properties:
+        blobId:
+          type: string
+        source:
+          type: string
+        score:
+          type: integer
+      required:
+        - blobId
+        - score
+    QueryResult:
+      type: object
+      properties:
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuerySource"
+      required:
+        - answer
+        - sources
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
