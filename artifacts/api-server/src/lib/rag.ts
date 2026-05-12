@@ -1,13 +1,55 @@
+import fs from "fs";
+import path from "path";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
+import { logger } from "./logger";
 
-// ─── In-memory store ──────────────────────────────────────────────────────────
+// ─── Persistence ──────────────────────────────────────────────────────────────
+const DATA_DIR = path.resolve(process.cwd(), "data");
+const STORE_FILE = path.join(DATA_DIR, "chunks.json");
+
+function ensureDataDir(): void {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+function saveStore(): void {
+  ensureDataDir();
+  fs.writeFileSync(
+    STORE_FILE,
+    JSON.stringify(
+      Object.fromEntries(
+        Object.entries(chunkStore).map(([id, chunk]) => [id, chunk]),
+      ),
+      null,
+      2,
+    ),
+  );
+}
+
+function loadStore(): Record<string, Chunk> {
+  if (!fs.existsSync(STORE_FILE)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(STORE_FILE, "utf-8")) as Record<string, Chunk>;
+  } catch {
+    logger.warn("Failed to parse chunks.json — starting with empty store");
+    return {};
+  }
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface Chunk {
   text: string;
   source: string;
   index: number;
 }
 
-const mockStore: Record<string, Chunk> = {};
+interface BlobMeta {
+  source: string;
+  index: number;
+  preview: string;
+}
+
+// ─── In-memory store (loaded from disk at startup) ────────────────────────────
+const chunkStore: Record<string, Chunk> = loadStore();
 
 // ─── Chunker ──────────────────────────────────────────────────────────────────
 export function chunkDocument(
@@ -40,28 +82,25 @@ function tokenize(text: string): string[] {
 }
 
 const invertedIdx: Record<string, Set<string>> = {};
-
-interface BlobMeta {
-  source: string;
-  index: number;
-  preview: string;
-}
-
 const blobMeta: Record<string, BlobMeta> = {};
 
-function addToIndex(
-  blobId: string,
-  chunkText: string,
-  source: string,
-  index: number,
-  preview: string,
-): void {
-  blobMeta[blobId] = { source, index, preview };
-  for (const token of tokenize(chunkText)) {
+function addToIndex(blobId: string, chunk: Chunk): void {
+  blobMeta[blobId] = {
+    source: chunk.source,
+    index: chunk.index,
+    preview: chunk.text.slice(0, 80) + "...",
+  };
+  for (const token of tokenize(chunk.text)) {
     if (!invertedIdx[token]) invertedIdx[token] = new Set();
     invertedIdx[token].add(blobId);
   }
 }
+
+// Rebuild index from persisted store on startup
+for (const [id, chunk] of Object.entries(chunkStore)) {
+  addToIndex(id, chunk);
+}
+logger.info({ chunks: Object.keys(chunkStore).length }, "RAG index loaded");
 
 function searchIndex(
   query: string,
@@ -82,9 +121,10 @@ function searchIndex(
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export function storeChunk(chunk: Chunk): string {
-  const id = `mock_${Date.now()}_${chunk.index}`;
-  mockStore[id] = chunk;
-  addToIndex(id, chunk.text, chunk.source, chunk.index, chunk.text.slice(0, 80) + "...");
+  const id = `chunk_${Date.now()}_${chunk.index}`;
+  chunkStore[id] = chunk;
+  addToIndex(id, chunk);
+  saveStore();
   return id;
 }
 
@@ -105,7 +145,7 @@ export async function ragQuery(
     };
   }
 
-  const chunks = hits.map((h) => mockStore[h.blobId]).filter(Boolean);
+  const chunks = hits.map((h) => chunkStore[h.blobId]).filter(Boolean);
 
   const context = chunks
     .map((c) => `[Source: ${c.source}, Chunk #${c.index}]\n${c.text}`)
