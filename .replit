@@ -30,3 +30,8 @@ externalPort = 80
 [[ports]]
 localPort = 22333
 externalPort = 3000
+
+[userenv]
+
+[userenv.shared]
+SHELBY_MODE = "Mock"
