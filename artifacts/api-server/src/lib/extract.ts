@@ -4,8 +4,10 @@ export async function extractText(buffer: Buffer, filename: string): Promise<str
   const ext = path.extname(filename).toLowerCase();
 
   if (ext === ".pdf") {
-    const pdfParse = (await import("pdf-parse")).default;
-    const result = await pdfParse(buffer);
+    // pdf-parse v1 is CJS; dynamic import wraps it in { default: fn }
+    const mod = await import("pdf-parse");
+    const pdfParse = mod.default ?? mod;
+    const result = await (pdfParse as (buf: Buffer) => Promise<{ text: string }>)(buffer);
     return result.text;
   }
 
